@@ -1,0 +1,45 @@
+# 01_add_validation_test.meme — task creation, duplicate rejection, unknown dep rejection
+use tracker_logic
+
+test add_task_ok:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    define t1: Task as Task(id="design", title="Architecture Design", duration=10, deps=no_deps, completed=false)
+    add t1 to tasks
+    assert length of tasks == 1
+    assert has_task(tasks, "design")
+    assert not (has_task(tasks, "backend"))
+
+    define d_deps: List<String> as ["design"]
+    define t2: Task as Task(id="backend", title="Backend Implementation", duration=25, deps=d_deps, completed=false)
+    add t2 to tasks
+    assert length of tasks == 2
+    assert has_task(tasks, "backend")
+
+test duplicate_id_detection:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="db", title="Database Setup", duration=5, deps=no_deps, completed=false) to tasks
+    # Attempting to check if "db" is a duplicate
+    assert has_task(tasks, "db")
+    define is_dup: Bool as has_task(tasks, "db")
+    assert is_dup
+
+test unknown_dep_detection:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="db", title="Database Setup", duration=5, deps=no_deps, completed=false) to tasks
+
+    define requested_deps: List<String> as ["db", "nonexistent"]
+    define has_unknown: Bool as false
+    for each dep in requested_deps:
+        if not (has_task(tasks, dep)):
+            set has_unknown to true
+    assert has_unknown
+
+test duplicate_dep_helper:
+    define deps_clean: List<String> as ["a", "b", "c"]
+    assert not (has_duplicate_string(deps_clean))
+
+    define deps_with_dup: List<String> as ["a", "b", "a"]
+    assert has_duplicate_string(deps_with_dup)

@@ -1,0 +1,104 @@
+# main.meme — tracker CLI: thin argv-router over tracker_logic.meme.
+# Unknown command prints usage and exits 1. Every error prints one line
+# and exits 1 (via `fail with`). Data persisted in data/tasks.json.
+
+use tracker_logic
+
+define argc: Int as argument count
+if argc < 2:
+    fail with "Error: unknown command. Usage: tracker <add-task|complete|ready|order|critical-path|blocked|progress> ..."
+
+define cmd: String as argument 1
+define data_path: String as "data/tasks.json"
+define tasks: List<Task> as load_tasks(data_path)
+
+match cmd:
+    when "add-task":
+        if argc != 5 and argc != 6:
+            fail with "Error: usage: tracker add-task <id> <title> <duration-hours> [dep1,dep2,...]"
+        define id: String as argument 2
+        define title: String as argument 3
+        define dur: Int as integer value of argument 4 or else -1
+        if dur <= 0:
+            fail with "Error: duration must be a positive integer: " + argument 4
+        if has_task(tasks, id):
+            fail with "Error: duplicate task id: " + id
+        define deps: List<String> as empty List<String>
+        if argc == 6:
+            define raw_deps: String as argument 5
+            if length of string raw_deps > 0:
+                set deps to split raw_deps by ","
+        if has_duplicate_string(deps):
+            fail with "Error: duplicate dependency in list"
+        for each d in deps:
+            if not (has_task(tasks, d)):
+                fail with "Error: unknown dependency: " + d
+        if would_cycle(tasks, id, deps):
+            fail with "Error: cycle detected for task: " + id
+        define new_t: Task as Task(id=id, title=title, duration=dur, deps=deps, completed=false)
+        add new_t to tasks
+        create directory "data"
+        call save_tasks(tasks, data_path)
+        print "Added task " + id
+
+    when "complete":
+        if argc != 3:
+            fail with "Error: usage: tracker complete <id>"
+        define id: String as argument 2
+        define idx: Int as find_task_index(tasks, id)
+        if idx < 0:
+            fail with "Error: unknown task: " + id
+        if tasks[idx].completed:
+            fail with "Error: task already complete: " + id
+        set tasks to complete_task(tasks, id)
+        create directory "data"
+        call save_tasks(tasks, data_path)
+        print "Completed task " + id
+
+    when "ready":
+        if argc != 2:
+            fail with "Error: usage: tracker ready"
+        define ready_list: List<String> as ready_tasks(tasks)
+        for each tid in ready_list:
+            print tid
+
+    when "order":
+        if argc != 2:
+            fail with "Error: usage: tracker order"
+        define order_list: List<String> as topological_order(tasks)
+        for each tid in order_list:
+            print tid
+
+    when "critical-path":
+        if argc != 2:
+            fail with "Error: usage: tracker critical-path"
+        define cp: CriticalPathResult as critical_path(tasks)
+        if length of cp.tasks == 0:
+            print "No tasks"
+            print "Total hours: 0"
+        else:
+            define chain_str: String as join cp.tasks with " -> "
+            print chain_str
+            print "Total hours: " + text of cp.total_hours
+
+    when "blocked":
+        if argc != 3:
+            fail with "Error: usage: tracker blocked <id>"
+        define id: String as argument 2
+        define idx: Int as find_task_index(tasks, id)
+        if idx < 0:
+            fail with "Error: unknown task: " + id
+        if tasks[idx].completed:
+            fail with "Error: task already complete: " + id
+        define blk: List<String> as blocked_tasks(tasks, id)
+        for each tid in blk:
+            print tid
+
+    when "progress":
+        if argc != 2:
+            fail with "Error: usage: tracker progress"
+        define prog: ProgressResult as calculate_progress(tasks)
+        print text of prog.done + "/" + text of prog.total + " tasks complete (" + text of prog.percent + "%)"
+
+    otherwise:
+        fail with "Error: unknown command: " + cmd + ". Usage: tracker <add-task|complete|ready|order|critical-path|blocked|progress> ..."

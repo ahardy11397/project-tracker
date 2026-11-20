@@ -1,0 +1,60 @@
+# 06_blocked_test.meme — transitive blocking tasks of incomplete tasks
+use tracker_logic
+
+test blocked_transitive_chain:
+    # a -> b -> c -> d, all incomplete
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="Task A", duration=1, deps=no_deps, completed=false) to tasks
+    add Task(id="b", title="Task B", duration=1, deps=["a"], completed=false) to tasks
+    add Task(id="c", title="Task C", duration=1, deps=["b"], completed=false) to tasks
+    add Task(id="d", title="Task D", duration=1, deps=["c"], completed=false) to tasks
+
+    # Transitive blocking tasks of "d": "a", "b", "c" (sorted)
+    define b_d: List<String> as blocked_tasks(tasks, "d")
+    assert length of b_d == 3
+    assert b_d[0] == "a"
+    assert b_d[1] == "b"
+    assert b_d[2] == "c"
+
+    # Transitive blocking tasks of "b": "a"
+    define b_b: List<String> as blocked_tasks(tasks, "b")
+    assert length of b_b == 1
+    assert b_b[0] == "a"
+
+    # Root task "a" has no blockers
+    define b_a: List<String> as blocked_tasks(tasks, "a")
+    assert length of b_a == 0
+
+test blocked_completed_prereqs_excluded:
+    # a -> b -> c
+    # When "a" is completed, only "b" blocks "c"
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="Task A", duration=1, deps=no_deps, completed=true) to tasks
+    add Task(id="b", title="Task B", duration=1, deps=["a"], completed=false) to tasks
+    add Task(id="c", title="Task C", duration=1, deps=["b"], completed=false) to tasks
+
+    define b_c: List<String> as blocked_tasks(tasks, "c")
+    assert length of b_c == 1
+    assert b_c[0] == "b"
+
+test blocked_branching_dag:
+    # x (incomplete), y (incomplete)
+    # m depends on x; n depends on y
+    # target depends on m, n
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="x", title="X", duration=1, deps=no_deps, completed=false) to tasks
+    add Task(id="y", title="Y", duration=1, deps=no_deps, completed=false) to tasks
+    add Task(id="m", title="M", duration=1, deps=["x"], completed=false) to tasks
+    add Task(id="n", title="N", duration=1, deps=["y"], completed=false) to tasks
+    add Task(id="target", title="Target", duration=1, deps=["m", "n"], completed=false) to tasks
+
+    define b_target: List<String> as blocked_tasks(tasks, "target")
+    # All 4 are incomplete, sorted: "m", "n", "x", "y"
+    assert length of b_target == 4
+    assert b_target[0] == "m"
+    assert b_target[1] == "n"
+    assert b_target[2] == "x"
+    assert b_target[3] == "y"

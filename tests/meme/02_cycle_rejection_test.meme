@@ -1,0 +1,61 @@
+# 02_cycle_rejection_test.meme — cycle detection and sheet/data unchanged assertion
+use tracker_logic
+
+test self_cycle_rejected:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="Task A", duration=5, deps=no_deps, completed=false) to tasks
+    define self_deps: List<String> as ["a"]
+    assert would_cycle(tasks, "a", self_deps)
+
+test two_cycle_rejected:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="Task A", duration=5, deps=no_deps, completed=false) to tasks
+    add Task(id="b", title="Task B", duration=3, deps=["a"], completed=false) to tasks
+    # Adding dep "b" to task "a" would form a 2-cycle a -> b -> a
+    define a_deps: List<String> as ["b"]
+    assert would_cycle(tasks, "a", a_deps)
+
+test indirect_cycle_rejected:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="Task A", duration=5, deps=no_deps, completed=false) to tasks
+    add Task(id="b", title="Task B", duration=3, deps=["a"], completed=false) to tasks
+    add Task(id="c", title="Task C", duration=4, deps=["b"], completed=false) to tasks
+    # Adding dep "c" to task "a" would form a 3-cycle a -> c -> b -> a
+    define a_deps: List<String> as ["c"]
+    assert would_cycle(tasks, "a", a_deps)
+
+test dag_no_false_positive:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="Task A", duration=5, deps=no_deps, completed=false) to tasks
+    add Task(id="b", title="Task B", duration=3, deps=["a"], completed=false) to tasks
+    add Task(id="c", title="Task C", duration=4, deps=["a"], completed=false) to tasks
+    # Adding new task "d" depending on "b" and "c" is a valid diamond DAG
+    define d_deps: List<String> as ["b", "c"]
+    assert not (would_cycle(tasks, "d", d_deps))
+
+test cycle_rejection_leaves_sheet_unchanged:
+    define scratch_path: String as "scratch_cycle_test.json"
+    define initial: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="Task A", duration=5, deps=no_deps, completed=false) to initial
+    add Task(id="b", title="Task B", duration=3, deps=["a"], completed=false) to initial
+    call save_tasks(initial, scratch_path)
+
+    define loaded: List<Task> as load_tasks(scratch_path)
+    define bad_deps: List<String> as ["b"]
+    # Verify that cycle would be detected
+    assert would_cycle(loaded, "a", bad_deps)
+
+    # Rejection path: nothing is applied or saved to scratch_path
+    define reloaded: List<Task> as load_tasks(scratch_path)
+    assert length of reloaded == 2
+    assert reloaded[0].id == "a"
+    assert length of reloaded[0].deps == 0
+    assert reloaded[1].id == "b"
+    assert reloaded[1].deps[0] == "a"
+
+    delete file scratch_path

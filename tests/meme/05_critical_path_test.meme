@@ -1,0 +1,62 @@
+# 05_critical_path_test.meme — critical path on diamond DAG with known answer, tie-breaking, and shared chains
+use tracker_logic
+
+test critical_path_diamond_dag_known_answer:
+    # Diamond DAG:
+    # root (5h)
+    # branch_short (3h, dep: root) -> join (4h, deps: branch_short, branch_long) = 12h
+    # branch_long (7h, dep: root) -> join (4h, deps: branch_short, branch_long) = 16h
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="root", title="Root Task", duration=5, deps=no_deps, completed=false) to tasks
+    add Task(id="branch_short", title="Short Branch", duration=3, deps=["root"], completed=false) to tasks
+    add Task(id="branch_long", title="Long Branch", duration=7, deps=["root"], completed=false) to tasks
+    add Task(id="join", title="Join Task", duration=4, deps=["branch_short", "branch_long"], completed=false) to tasks
+
+    define cp: CriticalPathResult as critical_path(tasks)
+    assert cp.total_hours == 16
+    assert length of cp.tasks == 3
+    assert cp.tasks[0] == "root"
+    assert cp.tasks[1] == "branch_long"
+    assert cp.tasks[2] == "join"
+
+test critical_path_tie_break:
+    # Multiple chains with identical total duration:
+    # root (2h) -> path_alpha (5h) -> sink (3h) = 10h
+    # root (2h) -> path_beta (5h) -> sink (3h) = 10h
+    # Tie-break lexicographically by first differing task id:
+    # index 1: "path_alpha" < "path_beta" -> path_alpha must win
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="root", title="Root", duration=2, deps=no_deps, completed=false) to tasks
+    add Task(id="path_beta", title="Beta", duration=5, deps=["root"], completed=false) to tasks
+    add Task(id="path_alpha", title="Alpha", duration=5, deps=["root"], completed=false) to tasks
+    add Task(id="sink", title="Sink", duration=3, deps=["path_alpha", "path_beta"], completed=false) to tasks
+
+    define cp: CriticalPathResult as critical_path(tasks)
+    assert cp.total_hours == 10
+    assert length of cp.tasks == 3
+    assert cp.tasks[0] == "root"
+    assert cp.tasks[1] == "path_alpha"
+    assert cp.tasks[2] == "sink"
+
+test critical_path_multiple_shared_chains:
+    # Chains sharing intermediate nodes:
+    # A (4h) -> B (6h) -> C (2h) -> E (3h) = 15h
+    # D (5h) -> B (6h) -> C (2h) -> E (3h) = 16h
+    # D (5h) -> B (6h) -> F (7h) = 18h
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="a", title="A", duration=4, deps=no_deps, completed=false) to tasks
+    add Task(id="d", title="D", duration=5, deps=no_deps, completed=false) to tasks
+    add Task(id="b", title="B", duration=6, deps=["a", "d"], completed=false) to tasks
+    add Task(id="c", title="C", duration=2, deps=["b"], completed=false) to tasks
+    add Task(id="e", title="E", duration=3, deps=["c"], completed=false) to tasks
+    add Task(id="f", title="F", duration=7, deps=["b"], completed=false) to tasks
+
+    define cp: CriticalPathResult as critical_path(tasks)
+    assert cp.total_hours == 18
+    assert length of cp.tasks == 3
+    assert cp.tasks[0] == "d"
+    assert cp.tasks[1] == "b"
+    assert cp.tasks[2] == "f"

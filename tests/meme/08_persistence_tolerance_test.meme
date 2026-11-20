@@ -1,0 +1,60 @@
+# 08_persistence_tolerance_test.meme — JSON roundtrip, missing file, corruption tolerance
+use tracker_logic
+
+test roundtrip_task_records:
+    define scratch_path: String as "scratch_roundtrip_test.json"
+    define initial: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="t1", title="First Task", duration=4, deps=no_deps, completed=true) to initial
+    define t2_deps: List<String> as ["t1"]
+    add Task(id="t2", title="Second Task", duration=8, deps=t2_deps, completed=false) to initial
+    define t3_deps: List<String> as ["t1", "t2"]
+    add Task(id="t3", title="Third Task", duration=12, deps=t3_deps, completed=false) to initial
+
+    call save_tasks(initial, scratch_path)
+
+    define loaded: List<Task> as load_tasks(scratch_path)
+    assert length of loaded == 3
+
+    assert loaded[0].id == "t1"
+    assert loaded[0].title == "First Task"
+    assert loaded[0].duration == 4
+    assert length of loaded[0].deps == 0
+    assert loaded[0].completed == true
+
+    assert loaded[1].id == "t2"
+    assert loaded[1].title == "Second Task"
+    assert loaded[1].duration == 8
+    assert length of loaded[1].deps == 1
+    assert loaded[1].deps[0] == "t1"
+    assert loaded[1].completed == false
+
+    assert loaded[2].id == "t3"
+    assert loaded[2].title == "Third Task"
+    assert loaded[2].duration == 12
+    assert length of loaded[2].deps == 2
+    assert loaded[2].deps[0] == "t1"
+    assert loaded[2].deps[1] == "t2"
+    assert loaded[2].completed == false
+
+    delete file scratch_path
+
+test missing_file_tolerance:
+    # Nonexistent file must safely load as empty list without traceback
+    define loaded: List<Task> as load_tasks("scratch_missing_file_never_exists.json")
+    assert length of loaded == 0
+
+test corrupt_json_tolerance:
+    define scratch_path: String as "scratch_corrupt_test.json"
+    write file scratch_path with "this is completely invalid json {{{["
+    define loaded: List<Task> as load_tasks(scratch_path)
+    assert length of loaded == 0
+    delete file scratch_path
+
+test schema_mismatch_tolerance:
+    define scratch_path: String as "scratch_schema_mismatch_test.json"
+    # Valid JSON array, but integers instead of TaskRow records
+    write file scratch_path with "[1, 2, 3, 4]"
+    define loaded: List<Task> as load_tasks(scratch_path)
+    assert length of loaded == 0
+    delete file scratch_path

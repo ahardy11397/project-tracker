@@ -1,0 +1,59 @@
+# 03_topo_order_test.meme — topological sort validity and pairwise dep-before-dependent check
+use tracker_logic
+
+function find_in_list(items: List<String>, wanted: String) -> Int:
+    define idx: Int as 0 - 1
+    for each index i item s in items:
+        if s == wanted:
+            set idx to i
+    return idx
+
+test topo_order_linear:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="t1", title="Task 1", duration=2, deps=no_deps, completed=false) to tasks
+    add Task(id="t2", title="Task 2", duration=3, deps=["t1"], completed=false) to tasks
+    add Task(id="t3", title="Task 3", duration=4, deps=["t2"], completed=false) to tasks
+    add Task(id="t4", title="Task 4", duration=1, deps=["t3"], completed=false) to tasks
+
+    define order: List<String> as topological_order(tasks)
+    assert length of order == 4
+    assert order[0] == "t1"
+    assert order[1] == "t2"
+    assert order[2] == "t3"
+    assert order[3] == "t4"
+
+test topo_order_diamond_pairwise_validity:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="root", title="Root", duration=5, deps=no_deps, completed=false) to tasks
+    add Task(id="br1", title="Branch 1", duration=3, deps=["root"], completed=false) to tasks
+    add Task(id="br2", title="Branch 2", duration=4, deps=["root"], completed=false) to tasks
+    add Task(id="join", title="Join", duration=2, deps=["br1", "br2"], completed=false) to tasks
+
+    define order: List<String> as topological_order(tasks)
+    assert length of order == 4
+
+    # Pairwise assertion: for EVERY task, each of its deps must appear before it
+    for each t in tasks:
+        define t_pos: Int as find_in_list(order, t.id)
+        assert t_pos >= 0
+        define tdeps: List<String> as t.deps
+        for each d in tdeps:
+            define d_pos: Int as find_in_list(order, d)
+            assert d_pos >= 0
+            assert d_pos < t_pos
+
+test topo_order_deterministic_tiebreak:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="zebra", title="Zebra", duration=1, deps=no_deps, completed=false) to tasks
+    add Task(id="apple", title="Apple", duration=1, deps=no_deps, completed=false) to tasks
+    add Task(id="mango", title="Mango", duration=1, deps=no_deps, completed=false) to tasks
+
+    define order: List<String> as topological_order(tasks)
+    assert length of order == 3
+    # With no dependencies, Kahn's algorithm tie-breaks lexicographically
+    assert order[0] == "apple"
+    assert order[1] == "mango"
+    assert order[2] == "zebra"

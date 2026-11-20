@@ -1,0 +1,44 @@
+# 04_ready_filtering_test.meme — ready-list filtering based on task dependency completion
+use tracker_logic
+
+test ready_tasks_initial:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="init_db", title="Init DB", duration=2, deps=no_deps, completed=false) to tasks
+    add Task(id="auth_spec", title="Auth Spec", duration=1, deps=no_deps, completed=false) to tasks
+    add Task(id="api_server", title="API Server", duration=8, deps=["init_db", "auth_spec"], completed=false) to tasks
+
+    define ready: List<String> as ready_tasks(tasks)
+    # Both root tasks are ready, sorted by id
+    assert length of ready == 2
+    assert ready[0] == "auth_spec"
+    assert ready[1] == "init_db"
+
+test ready_tasks_progression:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="t1", title="Task 1", duration=2, deps=no_deps, completed=false) to tasks
+    add Task(id="t2", title="Task 2", duration=3, deps=["t1"], completed=false) to tasks
+    add Task(id="t3", title="Task 3", duration=4, deps=["t2"], completed=false) to tasks
+
+    # Initially only t1 is ready
+    define r1: List<String> as ready_tasks(tasks)
+    assert length of r1 == 1
+    assert r1[0] == "t1"
+
+    # Complete t1 -> t2 becomes ready, t1 is no longer in ready
+    set tasks to complete_task(tasks, "t1")
+    define r2: List<String> as ready_tasks(tasks)
+    assert length of r2 == 1
+    assert r2[0] == "t2"
+
+    # Complete t2 -> t3 becomes ready
+    set tasks to complete_task(tasks, "t2")
+    define r3: List<String> as ready_tasks(tasks)
+    assert length of r3 == 1
+    assert r3[0] == "t3"
+
+    # Complete t3 -> nothing is ready
+    set tasks to complete_task(tasks, "t3")
+    define r4: List<String> as ready_tasks(tasks)
+    assert length of r4 == 0

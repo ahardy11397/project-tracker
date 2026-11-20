@@ -1,0 +1,328 @@
+# tracker_logic.meme — domain logic and graph algorithms for project-tracker.
+# 100% Memelang; all durations in integer HOURS.
+# Pure module: records + functions only (no top-level execution).
+
+record Task:
+    id: String
+    title: String
+    duration: Int
+    deps: List<String>
+    completed: Bool
+
+record TaskRow:
+    id: String
+    title: String
+    duration: Int
+    deps: String
+    completed: Bool
+
+record CriticalPathResult:
+    tasks: List<String>
+    total_hours: Int
+
+record ProgressResult:
+    done: Int
+    total: Int
+    percent: Int
+
+# ------------------------------------------------------------- serialization
+
+function to_row(t: Task) -> TaskRow:
+    define deps_str: String as ""
+    if length of t.deps > 0:
+        set deps_str to join t.deps with ","
+    return TaskRow(id=t.id, title=t.title, duration=t.duration, deps=deps_str, completed=t.completed)
+
+function from_row(r: TaskRow) -> Task:
+    define deps_list: List<String> as empty List<String>
+    if length of string r.deps > 0:
+        set deps_list to split r.deps by ","
+    return Task(id=r.id, title=r.title, duration=r.duration, deps=deps_list, completed=r.completed)
+
+function load_tasks(path: String) -> List<Task>:
+    define loaded: Optional<List<TaskRow>> as read json records TaskRow from file path or else nothing
+    define result: List<Task> as empty List<Task>
+    if loaded is not nothing:
+        define rows: List<TaskRow> as value of loaded
+        for each r in rows:
+            add from_row(r) to result
+    return result
+
+function save_tasks(tasks: List<Task>, path: String) -> Void:
+    define rows: List<TaskRow> as empty List<TaskRow>
+    for each t in tasks:
+        add to_row(t) to rows
+    write rows as json to file path
+
+# ------------------------------------------------------------------ helpers
+
+function copy_tasks(tasks: List<Task>) -> List<Task>:
+    define out: List<Task> as empty List<Task>
+    for each t in tasks:
+        add t to out
+    return out
+
+function copy_strings(items: List<String>) -> List<String>:
+    define out: List<String> as empty List<String>
+    for each s in items:
+        add s to out
+    return out
+
+function find_task_index(tasks: List<Task>, id: String) -> Int:
+    define idx: Int as 0 - 1
+    for each index i item t in tasks:
+        if t.id == id:
+            set idx to i
+    return idx
+
+function complete_task(tasks: List<Task>, id: String) -> List<Task>:
+    define out: List<Task> as copy_tasks(tasks)
+    define idx: Int as find_task_index(out, id)
+    if idx >= 0:
+        define old_t: Task as out[idx]
+        set out[idx] to Task(id=old_t.id, title=old_t.title, duration=old_t.duration, deps=old_t.deps, completed=true)
+    return out
+
+function has_task(tasks: List<Task>, id: String) -> Bool:
+    return find_task_index(tasks, id) >= 0
+
+function get_task(tasks: List<Task>, id: String) -> Optional<Task>:
+    define idx: Int as find_task_index(tasks, id)
+    if idx >= 0:
+        return optional tasks[idx]
+    return nothing
+
+function list_contains_string(items: List<String>, wanted: String) -> Bool:
+    for each s in items:
+        if s == wanted:
+            return true
+    return false
+
+function has_duplicate_string(items: List<String>) -> Bool:
+    define seen: Set<String> as empty set of String
+    for each s in items:
+        if seen contains s:
+            return true
+        add s to set seen
+    return false
+
+# ------------------------------------------------------------- graph models
+
+function build_adjacency_map(tasks: List<Task>) -> Map<String, List<String>>:
+    # Forward adjacency: dependency -> list of dependents (u -> v where u in v.deps)
+    define adj: Map<String, List<String>> as empty Map<String, List<String>>
+    for each t in tasks:
+        define empty_list: List<String> as empty List<String>
+        set adj[t.id] to empty_list
+    for each t in tasks:
+        define tdeps: List<String> as t.deps
+        for each d in tdeps:
+            if adj has key d:
+                define cur_list: List<String> as adj[d]
+                add t.id to cur_list
+                set adj[d] to cur_list
+    return adj
+
+function build_dependencies_map(tasks: List<Task>) -> Map<String, List<String>>:
+    # Reverse adjacency: task -> list of its dependencies
+    define deps_map: Map<String, List<String>> as empty Map<String, List<String>>
+    for each t in tasks:
+        set deps_map[t.id] to copy_strings(t.deps)
+    return deps_map
+
+# ---------------------------------------------------------- cycle detection
+
+function would_cycle(tasks: List<Task>, id: String, deps: List<String>) -> Bool:
+    # Checks if adding task with id and deps (or updating id with deps) would form a cycle.
+    # A cycle occurs if any dep is id itself, or if any dep can reach id through dependencies.
+    for each d in deps:
+        if d == id:
+            return true
+    define visited: Set<String> as empty set of String
+    define frontier: List<String> as empty List<String>
+    for each d in deps:
+        add d to frontier
+    define i: Int as 0
+    while i < length of frontier:
+        define curr: String as frontier[i]
+        add 1 to i
+        if curr == id:
+            return true
+        if visited contains curr:
+            continue
+        add curr to set visited
+        define idx: Int as find_task_index(tasks, curr)
+        if idx >= 0:
+            define t: Task as tasks[idx]
+            define tdeps: List<String> as t.deps
+            for each next_dep in tdeps:
+                add next_dep to frontier
+    return false
+
+# ------------------------------------------------------- topological order
+
+function topological_order(tasks: List<Task>) -> List<String>:
+    # Kahn's algorithm: repeatedly emits candidate tasks whose dependencies
+    # are all already emitted. Candidate ties are broken lexicographically.
+    define out: List<String> as empty List<String>
+    define emitted: Set<String> as empty set of String
+    define total: Int as length of tasks
+    while length of out < total:
+        define candidates: List<String> as empty List<String>
+        for each t in tasks:
+            if not (emitted contains t.id):
+                define deps_satisfied: Bool as true
+                define tdeps: List<String> as t.deps
+                for each d in tdeps:
+                    if not (emitted contains d):
+                        set deps_satisfied to false
+                if deps_satisfied:
+                    add t.id to candidates
+        if length of candidates == 0:
+            break
+        sort candidates ascending
+        define next_task: String as candidates[0]
+        add next_task to set emitted
+        add next_task to out
+    return out
+
+# ------------------------------------------------------------ critical path
+
+function is_chain_smaller(a: List<String>, b: List<String>) -> Bool:
+    define len_a: Int as length of a
+    define len_b: Int as length of b
+    define min_len: Int as len_a
+    if len_b < min_len:
+        set min_len to len_b
+    for i from 0 to min_len - 1:
+        if a[i] != b[i]:
+            return a[i] < b[i]
+    return len_a < len_b
+
+function critical_path(tasks: List<Task>) -> CriticalPathResult:
+    # Finds the longest dependency chain by total hours through the graph.
+    # Handles multiple chains sharing tasks.
+    # Tie-break lexicographically by first differing task id.
+    define empty_result: List<String> as empty List<String>
+    if length of tasks == 0:
+        return CriticalPathResult(tasks=empty_result, total_hours=0)
+
+    # Walk tasks in topological order to compute best chain ending at each task
+    define order: List<String> as topological_order(tasks)
+    define best_chains: Map<String, List<String>> as empty Map<String, List<String>>
+    define best_hours: Map<String, Int> as empty Map<String, Int>
+
+    for each tid in order:
+        define idx: Int as find_task_index(tasks, tid)
+        define t: Task as tasks[idx]
+        # Base chain: just task t itself
+        define base_chain: List<String> as [t.id]
+        define max_h: Int as t.duration
+        define best_c: List<String> as base_chain
+
+        # Check extending from each dependency
+        define tdeps: List<String> as t.deps
+        for each d in tdeps:
+            if best_hours has key d:
+                define prev_h: Int as best_hours[d]
+                define cand_h: Int as prev_h + t.duration
+                define prev_c: List<String> as best_chains[d]
+                define cand_c: List<String> as copy_strings(prev_c)
+                add t.id to cand_c
+                if cand_h > max_h:
+                    set max_h to cand_h
+                    set best_c to cand_c
+                else:
+                    if cand_h == max_h:
+                        if is_chain_smaller(cand_c, best_c):
+                            set best_c to cand_c
+
+        set best_hours[tid] to max_h
+        set best_chains[tid] to best_c
+
+    # Find the globally best chain across all tasks
+    define overall_max_h: Int as 0 - 1
+    define overall_best_c: List<String> as empty List<String>
+
+    for each tid in order:
+        define h: Int as best_hours[tid]
+        define c: List<String> as best_chains[tid]
+        if h > overall_max_h:
+            set overall_max_h to h
+            set overall_best_c to c
+        else:
+            if h == overall_max_h:
+                if is_chain_smaller(c, overall_best_c):
+                    set overall_best_c to c
+
+    return CriticalPathResult(tasks=overall_best_c, total_hours=overall_max_h)
+
+# -------------------------------------------------------------- ready tasks
+
+function ready_tasks(tasks: List<Task>) -> List<String>:
+    # Incomplete tasks whose deps are all completed, sorted by id
+    define ready: List<String> as empty List<String>
+    for each t in tasks:
+        if not t.completed:
+            define all_deps_done: Bool as true
+            define tdeps: List<String> as t.deps
+            for each d in tdeps:
+                define didx: Int as find_task_index(tasks, d)
+                if didx >= 0:
+                    if not tasks[didx].completed:
+                        set all_deps_done to false
+                else:
+                    set all_deps_done to false
+            if all_deps_done:
+                add t.id to ready
+    sort ready ascending
+    return ready
+
+# ------------------------------------------------------------ blocked tasks
+
+function blocked_tasks(tasks: List<Task>, id: String) -> List<String>:
+    # Transitive blocking tasks (incomplete dependencies) of an incomplete task, sorted
+    define blocking: Set<String> as empty set of String
+    define visited: Set<String> as empty set of String
+    define frontier: List<String> as empty List<String>
+    define start_idx: Int as find_task_index(tasks, id)
+    if start_idx < 0:
+        define empty_out: List<String> as empty List<String>
+        return empty_out
+    define start_t: Task as tasks[start_idx]
+    define sdeps: List<String> as start_t.deps
+    for each d in sdeps:
+        add d to frontier
+    define i: Int as 0
+    while i < length of frontier:
+        define curr: String as frontier[i]
+        add 1 to i
+        if visited contains curr:
+            continue
+        add curr to set visited
+        define idx: Int as find_task_index(tasks, curr)
+        if idx >= 0:
+            define t: Task as tasks[idx]
+            if not t.completed:
+                add curr to set blocking
+                define tdeps: List<String> as t.deps
+                for each dep in tdeps:
+                    add dep to frontier
+    define out: List<String> as empty List<String>
+    for each b in blocking:
+        add b to out
+    sort out ascending
+    return out
+
+# ----------------------------------------------------------------- progress
+
+function calculate_progress(tasks: List<Task>) -> ProgressResult:
+    define total: Int as length of tasks
+    define done: Int as 0
+    for each t in tasks:
+        if t.completed:
+            add 1 to done
+    define pct: Int as 0
+    if total > 0:
+        set pct to (done * 100) / total
+    return ProgressResult(done=done, total=total, percent=pct)

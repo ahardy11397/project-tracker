@@ -1,0 +1,55 @@
+# 07_progress_test.meme — progress math calculations
+use tracker_logic
+
+test progress_empty_list:
+    define tasks: List<Task> as empty List<Task>
+    define p: ProgressResult as calculate_progress(tasks)
+    assert p.done == 0
+    assert p.total == 0
+    assert p.percent == 0
+
+test progress_none_completed:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    for i from 1 to 10:
+        define tid: String as "t" + text of i
+        add Task(id=tid, title=tid, duration=1, deps=no_deps, completed=false) to tasks
+    define p: ProgressResult as calculate_progress(tasks)
+    assert p.done == 0
+    assert p.total == 10
+    assert p.percent == 0
+
+test progress_partial_completed:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    for i from 1 to 10:
+        define is_done: Bool as i <= 3
+        define tid: String as "t" + text of i
+        add Task(id=tid, title=tid, duration=1, deps=no_deps, completed=is_done) to tasks
+    define p: ProgressResult as calculate_progress(tasks)
+    assert p.done == 3
+    assert p.total == 10
+    assert p.percent == 30
+
+test progress_all_completed:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    for i from 1 to 10:
+        define tid: String as "t" + text of i
+        add Task(id=tid, title=tid, duration=1, deps=no_deps, completed=true) to tasks
+    define p: ProgressResult as calculate_progress(tasks)
+    assert p.done == 10
+    assert p.total == 10
+    assert p.percent == 100
+
+test progress_integer_division:
+    define tasks: List<Task> as empty List<Task>
+    define no_deps: List<String> as empty List<String>
+    add Task(id="t1", title="t1", duration=1, deps=no_deps, completed=true) to tasks
+    add Task(id="t2", title="t2", duration=1, deps=no_deps, completed=false) to tasks
+    add Task(id="t3", title="t3", duration=1, deps=no_deps, completed=false) to tasks
+    define p: ProgressResult as calculate_progress(tasks)
+    assert p.done == 1
+    assert p.total == 3
+    # 1/3 * 100 in integer arithmetic is 33
+    assert p.percent == 33
