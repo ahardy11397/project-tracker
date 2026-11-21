@@ -1,5 +1,5 @@
 # 05_critical_path_test.meme — critical path on diamond DAG with known answer, tie-breaking, and shared chains
-use tracker_logic
+use ../../tracker_logic
 
 test critical_path_diamond_dag_known_answer:
     # Diamond DAG:

@@ -1,5 +1,5 @@
 # 08_persistence_tolerance_test.meme — JSON roundtrip, missing file, corruption tolerance
-use tracker_logic
+use ../../tracker_logic
 
 test roundtrip_task_records:
     define scratch_path: String as "scratch_roundtrip_test.json"

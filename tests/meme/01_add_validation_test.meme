@@ -1,5 +1,5 @@
 # 01_add_validation_test.meme — task creation, duplicate rejection, unknown dep rejection
-use tracker_logic
+use ../../tracker_logic
 
 test add_task_ok:
     define tasks: List<Task> as empty List<Task>

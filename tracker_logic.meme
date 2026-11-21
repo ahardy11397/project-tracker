@@ -115,8 +115,7 @@ function build_adjacency_map(tasks: List<Task>) -> Map<String, List<String>>:
         define empty_list: List<String> as empty List<String>
         set adj[t.id] to empty_list
     for each t in tasks:
-        define tdeps: List<String> as t.deps
-        for each d in tdeps:
+        for each d in t.deps:
             if adj has key d:
                 define cur_list: List<String> as adj[d]
                 add t.id to cur_list
@@ -154,8 +153,7 @@ function would_cycle(tasks: List<Task>, id: String, deps: List<String>) -> Bool:
         define idx: Int as find_task_index(tasks, curr)
         if idx >= 0:
             define t: Task as tasks[idx]
-            define tdeps: List<String> as t.deps
-            for each next_dep in tdeps:
+            for each next_dep in t.deps:
                 add next_dep to frontier
     return false
 
@@ -172,8 +170,7 @@ function topological_order(tasks: List<Task>) -> List<String>:
         for each t in tasks:
             if not (emitted contains t.id):
                 define deps_satisfied: Bool as true
-                define tdeps: List<String> as t.deps
-                for each d in tdeps:
+                for each d in t.deps:
                     if not (emitted contains d):
                         set deps_satisfied to false
                 if deps_satisfied:
@@ -221,8 +218,7 @@ function critical_path(tasks: List<Task>) -> CriticalPathResult:
         define best_c: List<String> as base_chain
 
         # Check extending from each dependency
-        define tdeps: List<String> as t.deps
-        for each d in tdeps:
+        for each d in t.deps:
             if best_hours has key d:
                 define prev_h: Int as best_hours[d]
                 define cand_h: Int as prev_h + t.duration
@@ -265,8 +261,7 @@ function ready_tasks(tasks: List<Task>) -> List<String>:
     for each t in tasks:
         if not t.completed:
             define all_deps_done: Bool as true
-            define tdeps: List<String> as t.deps
-            for each d in tdeps:
+            for each d in t.deps:
                 define didx: Int as find_task_index(tasks, d)
                 if didx >= 0:
                     if not tasks[didx].completed:
@@ -290,8 +285,7 @@ function blocked_tasks(tasks: List<Task>, id: String) -> List<String>:
         define empty_out: List<String> as empty List<String>
         return empty_out
     define start_t: Task as tasks[start_idx]
-    define sdeps: List<String> as start_t.deps
-    for each d in sdeps:
+    for each d in start_t.deps:
         add d to frontier
     define i: Int as 0
     while i < length of frontier:
@@ -305,8 +299,7 @@ function blocked_tasks(tasks: List<Task>, id: String) -> List<String>:
             define t: Task as tasks[idx]
             if not t.completed:
                 add curr to set blocking
-                define tdeps: List<String> as t.deps
-                for each dep in tdeps:
+                for each dep in t.deps:
                     add dep to frontier
     define out: List<String> as empty List<String>
     for each b in blocking:

@@ -1,5 +1,5 @@
 # 06_blocked_test.meme — transitive blocking tasks of incomplete tasks
-use tracker_logic
+use ../../tracker_logic
 
 test blocked_transitive_chain:
     # a -> b -> c -> d, all incomplete

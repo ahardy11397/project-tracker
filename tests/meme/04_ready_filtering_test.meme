@@ -1,5 +1,5 @@
 # 04_ready_filtering_test.meme — ready-list filtering based on task dependency completion
-use tracker_logic
+use ../../tracker_logic
 
 test ready_tasks_initial:
     define tasks: List<Task> as empty List<Task>

@@ -1,5 +1,5 @@
 # 07_progress_test.meme — progress math calculations
-use tracker_logic
+use ../../tracker_logic
 
 test progress_empty_list:
     define tasks: List<Task> as empty List<Task>

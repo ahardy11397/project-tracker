@@ -1,5 +1,5 @@
 # 02_cycle_rejection_test.meme — cycle detection and sheet/data unchanged assertion
-use tracker_logic
+use ../../tracker_logic
 
 test self_cycle_rejected:
     define tasks: List<Task> as empty List<Task>

@@ -1,5 +1,5 @@
 # 03_topo_order_test.meme — topological sort validity and pairwise dep-before-dependent check
-use tracker_logic
+use ../../tracker_logic
 
 function find_in_list(items: List<String>, wanted: String) -> Int:
     define idx: Int as 0 - 1
@@ -38,8 +38,7 @@ test topo_order_diamond_pairwise_validity:
     for each t in tasks:
         define t_pos: Int as find_in_list(order, t.id)
         assert t_pos >= 0
-        define tdeps: List<String> as t.deps
-        for each d in tdeps:
+        for each d in t.deps:
             define d_pos: Int as find_in_list(order, d)
             assert d_pos >= 0
             assert d_pos < t_pos
